@@ -10,15 +10,54 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+//SOURCEAFIS
 import com.machinezoo.sourceafis.FingerprintImage;
 import com.machinezoo.sourceafis.FingerprintMatcher;
 import com.machinezoo.sourceafis.FingerprintTemplate;
+import java.io.File;
+//PICAM -- Legacy camera code; ENABLE RaspiStill: "Bullseye users can also still restore access to raspistill and raspivid. First, make sure the OS is up to date, then open a Terminal window and type sudo raspi-config. Go to Interface Options, then select Legacy Camera and reboot."
+import uk.co.caprica.picam.Camera;
+import uk.co.caprica.picam.CameraConfiguration;
+import uk.co.caprica.picam.CameraException;
+import uk.co.caprica.picam.CaptureFailedException;
+import uk.co.caprica.picam.FilePictureCaptureHandler;
+import uk.co.caprica.picam.NativeLibraryException;
+import uk.co.caprica.picam.PictureCaptureHandler;
+import uk.co.caprica.picam.enums.AutomaticWhiteBalanceMode;
+import uk.co.caprica.picam.enums.Encoding;
+import static uk.co.caprica.picam.CameraConfiguration.cameraConfiguration;
+import static uk.co.caprica.picam.PicamNativeLibrary.installTempLibrary;
+//jframe
+import java.awt.Image;
+import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
 public class FPScanner {
+	private static JFrame frame = null;
 	static Scanner input = new Scanner(System.in);
-	public static void main(String[] args) throws IOException {
-
-
+	public static void main(String[] args) throws IOException, NativeLibraryException {
 		int mode = 4;
+		//camera Configuration
+		installTempLibrary();
+		CameraConfiguration config =  cameraConfiguration()
+		.width(500)
+		.height(500)
+		.encoding(Encoding.PNG)
+		.quality(100)
+		.saturation(0);
+		
+		//Camera Object --delete
+		try(Camera cam = new Camera(config)){
+			cam.takePicture(new FilePictureCaptureHandler(new File("picam1.png")));
+		}
+		catch(CameraException e){
+			e.printStackTrace();
+		}
+		catch(CaptureFailedException e){
+			e.printStackTrace();
+		}
+
 		do {
 			/**MENU**/
 			System.out.println("Enter 1 for Enrollment, 2 for Verification, 3 for Identification, or 0 to quit.");
@@ -33,23 +72,42 @@ public class FPScanner {
 			case 1: System.out.println("Enrollment");
 					String first;
 					String last;
-					String file_name;
+					String filePath = "/home/fp5/prints/"; // enter the filepath of prints folder
 					Scanner name = new Scanner(System.in);
 					System.out.println("Enter your first name: ");
 					first = name.nextLine();
 					System.out.println("Enter your last name: ");
 					last = name.nextLine();
-					//DELETE THIS, CAMERA IMPLEMENTATION REPLACES THIS
-					System.out.println("DEVTOOL DELETE// Enter file name e.g: probe.png : ");
-					file_name = name.nextLine();
-					printScanMessage();
-					//get fingerprint image here
-					//TODO implement camera images here
-					FingerprintTemplate candidate = new FingerprintTemplate(
-							   new FingerprintImage(Files.readAllBytes(Paths.get("prints/" + file_name))));
-					byte[] data = candidate.toByteArray();
-					//send template to DB using enrollQuery
-					enrollQuery(first,last,data);
+					String imageName = first + "_" + last; //creates a name for the image
+					File file = new File(filePath+imageName);
+					if(file.exists()){
+						System.out.println("This profile is already enrolled. If you believe this is an error, contact a system administrator.");
+						break;
+					}
+					//Camera implementation 
+					System.out.println("Present Biometric and press the space-bar to take an image. Press q to return to menu.");
+					String capture = "";
+					while(capture != "Q" || capture != "q"){
+						capture = input.nextLine();
+						if (capture == " "){
+							printScanMessage();
+							try(Camera cam = new Camera(config)){
+								if(file.exists()){
+									file.delete();
+								}
+								cam.takePicture(new FilePictureCaptureHandler(file));
+							}
+							catch(CameraException | CaptureFailedException e){
+								e.printStackTrace();
+							}
+							imgWindow(file);
+							System.out.println("Press the space bar to take another image, or 'q' to confirm image and quit.");
+						}
+						FingerprintTemplate candidate = new FingerprintTemplate(new FingerprintImage(Files.readAllBytes(Paths.get(filePath + imageName))));
+						byte[] data = candidate.toByteArray();
+						//send template to DB using enrollQuery
+						enrollQuery(first,last,data);
+					}
 					break;
 			case 2: System.out.println("Verification");
 					String first_name;
@@ -82,12 +140,12 @@ public class FPScanner {
 					FingerprintMatcher matcher = new FingerprintMatcher(candidate_verification);
 					double similarity = matcher.match(ver_candidate);
 					System.out.println("The similarity score is : " + similarity + ".");
-
+					if(similarity>=40){System.out.println("You are a Match!");}	
+					if(similarity<40){System.out.println("You are not a Match.");}	
 					//output similarity score and match status.
 					//get fingerprint
 					break;
-			case 3: //double[] scores = null;
-
+			case 3: 
 					List<Double> scores = new ArrayList<Double>();
 					List<Integer> user_ids = new ArrayList<Integer>();
 					List<String> identify_first = new ArrayList<String>();
@@ -137,6 +195,22 @@ public class FPScanner {
 			}
 		}while(mode != 0);
 
+	}
+
+	public static void imgWindow(File file) throws IOException{
+			//close the window if already open
+			if(frame != null){
+				frame.dispose();
+			}
+			//create an image var
+			Image img = ImageIO.read(file);
+			//create a jframe window and display the image
+				//frame is a static var
+			frame = new JFrame(null, null);
+			JLabel label = new JLabel(new ImageIcon(img));
+			frame.add(label);
+			frame.pack();
+			frame.setVisible(true);
 	}
 
 	/**HELPER METHODS**/
