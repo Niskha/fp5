@@ -87,8 +87,9 @@ public class FPScanner {
 					//Camera implementation 
 					System.out.println("Present Biometric and press the space-bar to take an image. Press q to return to menu.");
 					String capture = "";
+					Scanner select = new Scanner(System.in);
 					while(capture != "Q" || capture != "q"){
-						capture = input.nextLine();
+						capture = select.nextLine();
 						if (capture == " "){
 							printScanMessage();
 							try(Camera cam = new Camera(config)){
@@ -103,11 +104,14 @@ public class FPScanner {
 							imgWindow(file);
 							System.out.println("Press the space bar to take another image, or 'q' to confirm image and quit.");
 						}
+					}
+					if(file.exists()){
 						FingerprintTemplate candidate = new FingerprintTemplate(new FingerprintImage(Files.readAllBytes(Paths.get(filePath + imageName))));
 						byte[] data = candidate.toByteArray();
 						//send template to DB using enrollQuery
 						enrollQuery(first,last,data);
 					}
+					
 					break;
 			case 2: System.out.println("Verification");
 					String first_name;
@@ -174,7 +178,6 @@ public class FPScanner {
 							i++;
 						}
 						} catch (SQLException e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
 						//index identifier
@@ -194,7 +197,6 @@ public class FPScanner {
 
 			}
 		}while(mode != 0);
-
 	}
 
 	public static void imgWindow(File file) throws IOException{
@@ -205,7 +207,7 @@ public class FPScanner {
 			//create an image var
 			Image img = ImageIO.read(file);
 			//create a jframe window and display the image
-				//frame is a static var
+				//frame is a static var in order to close window when new image is created
 			frame = new JFrame(null, null);
 			JLabel label = new JLabel(new ImageIcon(img));
 			frame.add(label);
@@ -267,7 +269,6 @@ public class FPScanner {
 			Thread.sleep(250);
 			System.out.println(".");
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
